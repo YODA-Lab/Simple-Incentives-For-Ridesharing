@@ -11,10 +11,10 @@ The following packages are required to run the code:
 - Pandas
 - Numpy
 
-In addition to the above packages, the code also requires some additional files. These are included in the following URL:
+In addition to the above packages, the code may also require some additional files. If any files are missing, they may be downloaded from the following URL:
 https://www.mediafire.com/folder/hrokt4yux8h1s/ny .
 
-Download all files and place them in the folder ``Code\data\ny``.
+Download any required files and place them in the folder ``Code\data\ny``.
 
 ### Execution
 To run the code, navigate to ``Code\src_new`` and use the following command:
