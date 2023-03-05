@@ -12,10 +12,11 @@ The following packages are required to run the code:
 - Numpy
 
 In addition to the above packages, the code also requires some additional files. These are included in the following URL:
-https://www.mediafire.com/folder/hrokt4yux8h1s/ny
-Download all files and place them in the folder ``Code\data\ny``
+https://www.mediafire.com/folder/hrokt4yux8h1s/ny .
 
-###Execution
+Download all files and place them in the folder ``Code\data\ny``.
+
+### Execution
 To run the code, navigate to ``Code\src_new`` and use the following command:
 
 ```
@@ -39,12 +40,11 @@ To use a different value function, just change the ``-v`` flag to one of the fol
 
 The default solver is ``-sol ILP``. To use a random solver, change the ``-sol`` flag to ``-sol random``.
 
-For more detailed console output, change verbose=True in line 65 of test_driver_fair.py
+For more detailed console output, change verbose=True in line 65 of test_driver_fair.py.
 
-###Results
+### Results
 The results are logged in a folder called ``Runs\`` in the parent directory of ``Code\``. 
-Navigating to the relevant folder (e.g. 
-``Runs\SI\1000veh_4cap\DAY11(0-24)\alpha_d0.0\delta0.0\alpha0.0\beta2.0\PathBasedNN\``), one can find the logged outputs. ``'summary.pkl'`` contains the final stats of the run as a dictionary. It has the following fields:
+Navigating to the relevant folder (e.g. ``Runs\SI\1000veh_4cap\DAY11(0-24)\alpha_d0.0\delta0.0\alpha0.0\beta2.0\PathBasedNN\``), one can find the logged outputs. ``'summary.pkl'`` contains the final stats of the run as a dictionary. It has the following fields:
 ```
 summary = {
     "SR": Overall service rate, 
