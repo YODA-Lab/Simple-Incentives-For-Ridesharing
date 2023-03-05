@@ -1,0 +1,12 @@
+zone_traveltime.csv : 2D table, travel time between pairs of nodes (i,j)
+zone_dist.csv : 2D table, pairwise distances between points 
+	%Above two are used for pricing. Otherwise, just the travel times should be enough.
+zone_path.csv : 2D table. a[i][j] is the next node on the route from node i to node j
+ignorezonelist.txt : list of bad nodes used to filter out requests
+taxi_3000_final.txt : file for deterministic initial location of taxis
+files_{}sec/test_flow_5000_DAY : request information. 
+	Line 1: number of total time steps
+	Line 2: "Flows:0-0"
+	Line 3: Source,Destination,Number_of_requests.0 Eg: "2587,2411,1.0"
+	Repeat line 3 format until next interval. Then line 2 with 1-1
+	Continue
