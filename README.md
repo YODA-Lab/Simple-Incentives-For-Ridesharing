@@ -64,3 +64,10 @@ summary = {
     'runtime': Total runtime of the simulation test day,
     }
 ```
+
+## Division of Manhattan into neighborhoods
+We follow a simple procedure of creating neighbourhoods as a collection of zip codes. Each intersection in NYC is mapped to a zip code, as provided in the file ``Code\data\ny\neighbourhood_zones.json``. The zip codes are matched to the neighbourhoods as provided in the file ``Code\data\ny\neigh_zipcodes.json``. There are 10 neighbourhoods in Manhattan, as shown in the figure below:
+
+<p align="center">
+  <img src="nyzones.png" />
+</p>
