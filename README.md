@@ -2,6 +2,15 @@
 
 This repository contains code, results and supplementary discussion for the paper titled "Using Simple Incentives to Improve Two-Sided Fairness in Ridesharing Systems", presented at the International Conference on Autonomous Planning and Scheduling (ICAPS 2023).
 
+```
+@inproceedings{SI_Kumar2023, 
+    title={Using Simple Incentives to Improve Two-Sided Fairness in Ridesharing Systems}, 
+    author={Kumar, Ashwin and Vorobeychik, Yevgeniy and Yeoh, William}, 
+    booktitle={International Conference on Automated Planning and Scheduling}, 
+    year={2023},
+}
+```
+
 ## Code usage
 The following packages are required to run the code:
 - Python=3.6
