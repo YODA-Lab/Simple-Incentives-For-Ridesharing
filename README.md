@@ -71,3 +71,6 @@ We follow a simple procedure of creating neighbourhoods as a collection of zip c
 <p align="center">
   <img src="nyzones.png" />
 </p>
+
+## Attribution
+A major part of the simulator code was taken from NeurADP (https://github.com/sanketkshah/NeurADP-for-Ride-Pooling), and modified to include our fairness approaches and some other matching algorithms. We thank the authors of NeurADP for providing an incredibly useful base for designing and running experiments in the domain of rideshare-matching.
