@@ -1,4 +1,4 @@
-# Simple incentives for Ridesharing Fairness
+# Simple Incentives for Ridesharing Fairness
 
 This repository contains code, results and supplementary discussion for the paper titled "Using Simple Incentives to Improve Two-Sided Fairness in Ridesharing Systems", presented at the International Conference on Autonomous Planning and Scheduling (ICAPS 2023).
 
