@@ -7,7 +7,7 @@ from Experience import Experience
 from Request import Request
 from Customer import *
 from Pricer import *
-from utils import filter_actions_by_req, add_reward_to_score, add_fairness_to_score, add_driver_fairness_to_score, gini, get_driver_earning
+from utils import filter_actions_by_req, add_reward_to_score, add_GIFF_to_score, gini, get_driver_earning
 from BasePrice import *
 
 from typing import List, Optional
@@ -19,6 +19,9 @@ from random import seed
 import pickle
 import os
 
+from fairness_functions import fairness_router
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 # set seed
 import random
@@ -89,7 +92,7 @@ def run_epoch(envt: Environment,
         for request in current_requests:
             request.price = request.base_price
         if verbose: print('Priced requests')
-
+        print()
         # Choose actions for each request/vehicle
 
         #General Form:
@@ -103,12 +106,19 @@ def run_epoch(envt: Environment,
         scored_actions_all_vehs = value_function.get_future_value([experience])
         if verbose: print('Scored actions')
         
-        scored_actions_all_vehs = add_reward_to_score(scored_actions_all_vehs, envt)
+        if args.giff:
+            # add_GIFF_to_score
+            scored_actions_all_vehs = add_GIFF_to_score(scored_actions_all_vehs, envt, args.fairness_type)
+        else:
+            scored_actions_all_vehs = add_reward_to_score(scored_actions_all_vehs, envt)
 
 
         if verbose: print('Added bonus and reward actions')
         #ILP 
         if solver=='ILP':
+            # minimum length of actions for any agent
+            min_len = min([len(actions) for actions in scored_actions_all_vehs])
+            print(f"ILP: Min length of actions: {min_len}", len(scored_actions_all_vehs))
             scored_final_actions = central_agent.choose_actions(scored_actions_all_vehs, is_training=is_training, epoch_num=envt.num_days_trained)
         
         # Greedy #Current implementation is even less efficient than ILP
@@ -266,7 +276,9 @@ if __name__ == '__main__':
     parser.add_argument('--tag', type=str, default='')
     parser.add_argument('-f', '--filtered', action='store_true', default=False, help='whether to filter out neighborhoods')
     parser.add_argument('-sol', '--solver', type=str, default='ILP')
-    parser.add_argument('-ftype', '--fairtype', type=str, default='', help='Choose between zone pair fairness (pair) and source zone fairness (src)')
+    parser.add_argument('-ftype', '--fairtype', type=str, default='pair', help='Choose between zone pair fairness (pair) and source zone fairness (src)')
+    parser.add_argument('-fairness_type', '--fairness_type', type=str, default='variance', help='Name of a fairness function (For GIFF)')
+    parser.add_argument('-giff', '--giff', type=bool, default=False, help='Whether to use GIFF')
     args = parser.parse_args()
 
     # CONSTANTS
@@ -335,6 +347,8 @@ if __name__ == '__main__':
     initial_states = envt.get_initial_states(envt.NUM_VEHS, is_training=False)
     vehs_predefined = [Vehicle(veh_idx, initial_state) for veh_idx, initial_state in enumerate(initial_states)]
 
+    fairness_function = fairness_router(args.fairness_type)
+
     envt.reset(flush=True)
     envt_test = envt
     oracle_test = oracle
@@ -349,5 +363,35 @@ if __name__ == '__main__':
         value_function.add_to_logs('test_time', end_time - start_time, envt_test.num_days_trained)
         envt.num_days_trained += 1
     print(args)
+
+    print("Final test results: ")
+    print("Final service rate: ", envt.service_rate)
+    print("Final pair SR mean: ", envt.mean_pair_sr)
+    print("Final pair SR min: ", envt.min_pair_sr)
+    ZsP = envt.pair_sr_overall
+    ZsP = dict2mat(ZsP, key_order=envt.keys_list, select_index=0)
+    ZsP = [sr for row in ZsP for sr in row]
+    fairness_metric_P = fairness_function.get_metric(ZsP)
+    print("Pass Metrics: ", fairness_metric_P)
+    print("Driver mean: ", envt.driver_avg)
+    print("Driver min: ", envt.driver_min)
+    ZsD = envt.driver_earnings
+    fairness_metric_D = fairness_function.get_metric(ZsD)
+    print("Driver Metrics: ", fairness_metric_D)
+    
+    #save to "Results/GIFF.csv". Add a row, create a new file if it doesn't exist
+    resfile = f"Results/GIFF{args.numvehs}.csv"
+    os.makedirs(os.path.dirname(resfile), exist_ok=True)
+    columns =  ['VF', 'giff', 'num_vehicles', 'alpha', 'beta', 'delta', 'SR', 'Fairness Type (GIFF)', 'Metric (P)', 'Metric (D)', 'Pair SR mean', 'Pair SR min', 'Driver mean', 'Driver min']
+    # columns =  ['VF', 'alpha', 'beta', 'delta', 'SR', 'Fairness Type (GIFF)', 'Metric (P)', 'Metric (D)', 'Pair SR mean', 'Pair SR min', 'Driver mean', 'Driver min', 'SR Dist', 'Driver Dist']
+    if not os.path.exists(resfile):
+        with open(resfile, 'w') as f:
+            f.write(','.join(columns)+'\n')
+    with open(resfile, 'a') as f:
+        dic = {'VF':args.valuefunction, 'num_vehicles':args.numvehs, 'alpha':args.alpha, 'beta':args.beta, 'delta':args.delta, 'SR':envt.service_rate, 'Fairness Type (GIFF)':args.fairness_type, 'Metric (P)':fairness_metric_P, 'Metric (D)':fairness_metric_D, 'Pair SR mean':envt.mean_pair_sr, 'Pair SR min':envt.min_pair_sr, 'Driver mean':envt.driver_avg, 'Driver min':envt.driver_min}
+        dic['giff'] = args.giff
+        f.write(','.join([str(dic[col]) for col in columns])+'\n')
+        
+
     envt.reset(flush=True)
 

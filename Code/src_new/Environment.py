@@ -757,3 +757,97 @@ class MapEnvironment(Environment):
         
         total_reward = total_reward + SIPass + SIDrive
         return total_reward
+
+    def get_modded_zs(self, action, role):
+        """
+        Return the modified Zs for a given action
+        """
+        if role=='passenger':
+            if self.fairtype=='src':
+                dist = deepcopy(self.source_sr)
+                # sr, seen, tot
+                for req in action.requests:
+                    frm = self.zone_mapping[req.pickup]
+                    dist[frm][1] += 1
+                    dist[frm][2] += 1
+                    dist[frm][0] = dist[frm][1]/dist[frm][2]
+                # flatten the dictionary and return
+                return [v for k,v in dist.items()]
+            else:
+                dist = deepcopy(self.pair_sr)
+                for req in action.requests:
+                    frm, to = self.zone_mapping[req.pickup], self.zone_mapping[req.dropoff]
+                    dist[frm][to][1] += 1
+                    dist[frm][to][2] += 1
+                    dist[frm][to][0] = dist[frm][to][1]/dist[frm][to][2]
+                # flatten the dictionary and return
+                return [v for k,g in dist.items() for k2,v in g.items()]
+        elif role=='driver':
+            dist = deepcopy(self.driver_earnings)
+            for req in action.requests:
+                dist[action.veh_id] += req.base_price
+            return dist
+
+
+    def get_GIFF(self, action, Qia, delta_adv, fairness_fn):
+        """
+        Return the GIFF for a given action
+        """
+        request_infos = self.get_request_infos(action)
+        # The total reward is the sum of rewards of all requests in a given action
+
+        profit_term = 0.0
+        for req_info in request_infos:
+            request = req_info['request']
+            # Sanity Check: Ensure that the requests associated with the actions have been priced
+            assert request.price is not None
+
+            reward_term = request.get_reward(request.price)
+            profit_term += reward_term
+
+        total_reward = profit_term
+
+        #adding driver and rider fairness
+        # GIFF(P)
+        GIFFPass = 0
+        if self.beta!=0:
+            # flatten the dictionary
+            if self.fairtype=='src':
+                Zs = [v for k,v in self.source_sr.items()]
+            else:
+                Zs = [v for k,g in self.pair_sr.items() for k2,v in g.items()]
+            f_prev = fairness_fn.get_metric(Zs)
+
+            Zs_post = self.get_modded_zs(action, 'passenger')
+            f_post = fairness_fn.get_metric(Zs_post)
+            delF = np.sign(f_post-f_prev)
+            for req in action.requests:
+                frm,to = self.zone_mapping[req.pickup], self.zone_mapping[req.dropoff]
+                z_i = self.pair_sr[frm][to][0] if self.fairtype=='pair' else self.source_sr[frm][0]
+                mean_z = self.mean_pair_sr if self.fairtype=='pair' else self.mean_source_sr
+                adv_scaling_factor = z_i - mean_z
+                delQ = Qia
+                advantage_correction = adv_scaling_factor*delQ
+                GIFFp = delF + delta_adv * advantage_correction
+                GIFFPass += self.beta * GIFFp
+        
+        # GIFF(D)
+        GIFFDrive = 0
+        if self.delta!=0:
+            Zs = self.driver_earnings
+            f_prev = fairness_fn.get_metric(Zs)
+            Zs_post = self.get_modded_zs(action, 'driver')
+            f_post = fairness_fn.get_metric(Zs_post)
+            delF = f_post-f_prev
+
+            dr_avg = np.mean(Zs)
+            dr_i = Zs[action.veh_id]
+            adv_scaling_factor = dr_i - dr_avg
+            delQ = Qia
+            for req in action.requests:
+                GIFFd = delF + delta_adv * adv_scaling_factor * delQ
+                GIFFDrive += self.delta * GIFFd
+
+        # total_reward = (1-max(self.beta, self.delta))*total_reward + GIFFPass + GIFFDrive
+        total_reward = total_reward + GIFFPass + GIFFDrive
+        return total_reward

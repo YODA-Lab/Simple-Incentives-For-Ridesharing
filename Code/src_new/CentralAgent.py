@@ -166,7 +166,8 @@ class CentralAgent(object):
         final_actions_all_utils: List[List[Tuple[Action, float]]] = []
         for util_idx in range(NUM_UTILS):
             # Create Objective
-            score = model.sum((utils[util_idx] + get_noise(variable)) * variable
+            # score = model.sum((utils[util_idx] + get_noise(variable)) * variable
+            score = model.sum(round(utils[util_idx] + get_noise(variable), 6) * variable
                               for action_dict in decision_variables.values()
                               for variable, utils in action_dict.values())
             model.maximize(score)

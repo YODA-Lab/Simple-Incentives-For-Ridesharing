@@ -3,6 +3,7 @@ from typing import List, Tuple, Callable, Optional
 from functools import partial
 import numpy as np
 from copy import deepcopy
+from fairness_functions import fairness_router
 
 class IncorrectUsageError(Exception):
     """Custom exception that's called when a function is used incorrectly."""
@@ -52,6 +53,46 @@ def add_reward_to_score(
         reward = envt.get_reward(action)
         return (action, reward + score)
     process_fn = partial(add_reward, envt)
+
+    new_scored_actions_all_vehs = _filter_actions(scored_actions_all_vehs, process_fn)
+    return new_scored_actions_all_vehs
+
+def add_GIFF_to_score(scored_actions_all_vehs, envt, fairness_type='variance'):
+    """
+    General Incentives for Fairness.
+
+    For each vehicle, grab all action values
+    For requests, delQ is always positive (being assigned is always good)
+
+    For both, get advantage of the corresponding group
+    For both, get the delF because of each action being applied.
+        - this may be poorly scaled, can consider static like SI does
+
+    For any action:
+        Q' = (1-beta) * Q + beta * (delF + delta_adv * advantage_correction)
+        
+        advantage_correction = adv_scaling_factor * delQ
+        adv_scaling_factor = z[group] - mean(z)
+        delQ = Qia (- meanQ in typical formulation, but we don't have mean Qs for passengers)
+            Shouldn't matter, as it is only being used for scaling.
+            Equivalent to baseline=0. (note, ILP outputs are invariant to translation)
+        
+        delF = postFair - preFair
+        prefair = fairness_fn.get_metric(z)
+        postfair = fairness_fn.get_metric(z + Qia)?? 
+            This is tough, Qia is not at the same scale as z.
+            Further, delF scale may be too small.
+                Alt option: use sign(postfair - prefair)
+        Further, this is summed over all requests in the action
+    """
+    beta = envt.beta
+    delta = envt.delta
+    fairness_fn = fairness_router(fairness_type)
+    def add_GIFF(envt, action, score):
+        reward = envt.get_GIFF(action, score, delta_adv=0.1, fairness_fn=fairness_fn)
+        # return (action, (1-max([beta,delta]))*score + reward) # Reward = R + beta * GIFF(P) + delta * GIFF(D)
+        return (action, score + reward) # Reward = R + beta * GIFF(P) + delta * GIFF(D)
+    process_fn = partial(add_GIFF, envt)
 
     new_scored_actions_all_vehs = _filter_actions(scored_actions_all_vehs, process_fn)
     return new_scored_actions_all_vehs
