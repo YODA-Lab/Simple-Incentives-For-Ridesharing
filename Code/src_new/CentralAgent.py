@@ -167,7 +167,7 @@ class CentralAgent(object):
         for util_idx in range(NUM_UTILS):
             # Create Objective
             # score = model.sum((utils[util_idx] + get_noise(variable)) * variable
-            score = model.sum(round(utils[util_idx] + get_noise(variable), 6) * variable
+            score = model.sum(round(utils[util_idx] + get_noise(variable), 15) * variable
                               for action_dict in decision_variables.values()
                               for variable, utils in action_dict.values())
             model.maximize(score)
@@ -180,7 +180,12 @@ class CentralAgent(object):
             assigned_actions: Dict[int, int] = {}
             for action_id, action_dict in decision_variables.items():
                 for veh_idx, (variable, _) in action_dict.items():
-                    if (solution.get_value(variable) == 1):
+                    # if (solution.get_value(variable) == 1):
+                    if np.isclose(solution.get_value(variable), 1):
+                        # if solution.get_value(variable) != 1:
+                        #     print(solution.get_value(variable))
+                        #     print(variable.get_name())
+                        #     print("This should be 1")
                         assigned_actions[veh_idx] = action_id
 
             # Use this to create list of final actions

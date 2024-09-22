@@ -88,8 +88,13 @@ def add_GIFF_to_score(scored_actions_all_vehs, envt, fairness_type='variance'):
     beta = envt.beta
     delta = envt.delta
     fairness_fn = fairness_router(fairness_type)
+        
+    if envt.fairtype=='src':
+        envt.ZsP = np.array([v[0] for k,v in envt.source_sr.items()])
+    else:
+        envt.ZsP = np.array([v[0] for k,g in envt.pair_sr.items() for k2,v in g.items()])
     def add_GIFF(envt, action, score):
-        reward = envt.get_GIFF(action, score, delta_adv=0.1, fairness_fn=fairness_fn)
+        reward = envt.get_GIFF(action, score, delta_adv=0.0, fairness_fn=fairness_fn)
         # return (action, (1-max([beta,delta]))*score + reward) # Reward = R + beta * GIFF(P) + delta * GIFF(D)
         return (action, score + reward) # Reward = R + beta * GIFF(P) + delta * GIFF(D)
     process_fn = partial(add_GIFF, envt)

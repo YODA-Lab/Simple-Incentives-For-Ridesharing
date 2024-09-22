@@ -365,31 +365,48 @@ if __name__ == '__main__':
     print(args)
 
     print("Final test results: ")
-    print("Final service rate: ", envt.service_rate)
-    print("Final pair SR mean: ", envt.mean_pair_sr)
-    print("Final pair SR min: ", envt.min_pair_sr)
-    ZsP = envt.pair_sr_overall
-    ZsP = dict2mat(ZsP, key_order=envt.keys_list, select_index=0)
-    ZsP = [sr for row in ZsP for sr in row]
+    res = {}
+    res['SR'] = envt.service_rate
+    pair_srs = [v[0] for grp in envt.pair_sr_overall.values() for v in grp.values() if v[2]>2]
+    source_srs = [v[0] for v in envt.source_sr_overall.values() if v[2]>2]
+    driver_earnings = envt.driver_earnings
+
+    ZsP = source_srs if args.fairtype=='src' else pair_srs
+    ZsP = np.array(ZsP)
     fairness_metric_P = fairness_function.get_metric(ZsP)
-    print("Pass Metrics: ", fairness_metric_P)
-    print("Driver mean: ", envt.driver_avg)
-    print("Driver min: ", envt.driver_min)
-    ZsD = envt.driver_earnings
+    ZsD = driver_earnings
+    ZsD = np.array(ZsD)
     fairness_metric_D = fairness_function.get_metric(ZsD)
-    print("Driver Metrics: ", fairness_metric_D)
+    res[f'Metric (P)'] = fairness_metric_P
+    res[f'Metric (D)'] = fairness_metric_D
+
+    res['pair SR mean'] = np.mean(pair_srs)
+    res['pair SR min'] = np.min(pair_srs)
+    res['source SR mean'] = np.mean(source_srs)
+    res['source SR min'] = np.min(source_srs)
+    res['driver mean'] = np.mean(driver_earnings)
+    res['driver min'] = np.min(driver_earnings)
+
+
+    #prettily print results
+    for k,v in res.items():
+        print(f"{k}: {v}")
+
     
     #save to "Results/GIFF.csv". Add a row, create a new file if it doesn't exist
     resfile = f"Results/GIFF{args.numvehs}.csv"
     os.makedirs(os.path.dirname(resfile), exist_ok=True)
-    columns =  ['VF', 'giff', 'num_vehicles', 'alpha', 'beta', 'delta', 'SR', 'Fairness Type (GIFF)', 'Metric (P)', 'Metric (D)', 'Pair SR mean', 'Pair SR min', 'Driver mean', 'Driver min']
+    # columns =  ['VF', 'giff', 'num_vehicles', 'alpha', 'beta', 'delta', 'SR', 'Fairness Type (GIFF)', 'Metric (P)', 'Metric (D)', 'Pair SR mean', 'Pair SR min', 'Source SR mean', 'Source SR min', 'Driver mean', 'Driver min']
     # columns =  ['VF', 'alpha', 'beta', 'delta', 'SR', 'Fairness Type (GIFF)', 'Metric (P)', 'Metric (D)', 'Pair SR mean', 'Pair SR min', 'Driver mean', 'Driver min', 'SR Dist', 'Driver Dist']
+    # use columns from res
+    columns = ['VF', 'giff', 'num_vehicles', 'alpha', 'beta', 'delta', 'Fairness Type (GIFF)']
+    columns.extend(list(res.keys()))
     if not os.path.exists(resfile):
         with open(resfile, 'w') as f:
             f.write(','.join(columns)+'\n')
     with open(resfile, 'a') as f:
-        dic = {'VF':args.valuefunction, 'num_vehicles':args.numvehs, 'alpha':args.alpha, 'beta':args.beta, 'delta':args.delta, 'SR':envt.service_rate, 'Fairness Type (GIFF)':args.fairness_type, 'Metric (P)':fairness_metric_P, 'Metric (D)':fairness_metric_D, 'Pair SR mean':envt.mean_pair_sr, 'Pair SR min':envt.min_pair_sr, 'Driver mean':envt.driver_avg, 'Driver min':envt.driver_min}
-        dic['giff'] = args.giff
+        dic = {'VF':args.valuefunction, 'giff':args.giff, 'num_vehicles':args.numvehs, 'alpha':args.alpha, 'beta':args.beta, 'delta':args.delta, 'Fairness Type (GIFF)':args.fairness_type}
+        dic.update(res)
         f.write(','.join([str(dic[col]) for col in columns])+'\n')
         
 

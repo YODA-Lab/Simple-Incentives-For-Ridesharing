@@ -158,7 +158,10 @@ class Maximin(JAXFairnessFunction):
 	
 	def evaluate(self, Z: np.ndarray)->float:
 		#jax for automatic differentiation
-		return np.min(Z)
+		# count number of agents at min
+		min_val = np.min(Z)
+		min_count = np.sum(Z == min_val)
+		return min_val - 0.01 * min_count/(min_val + 0.1)
 	
 	def is_maximizing(self)->bool:
 		return True
@@ -274,14 +277,16 @@ class GGF(JAXFairnessFunction):
 		self.epsilon = epsilon
 	
 	def set_weights(self, n_agents: int):
-		# Create a default weight vector, reducing sequence. Normalize to sum to 1
-		# self.weights = np.array([1/(i+1) for i in range(n_agents)])
-		self.weights = np.array([1/(2**i) for i in range(n_agents)])
+		# Create a default weight vector, reducing sequence.
+		self.weights = np.array([1/(i+1) for i in range(n_agents)])
+		# self.weights = np.array([1/(2**i) for i in range(n_agents)])
 		# self.weights /= np.sum(self.weights)
 		assert np.all(np.diff(self.weights) < 0)
 
 	def evaluate(self, Z: np.ndarray)->float:
 		if self.weights is None:
+			self.set_weights(Z.shape[0])
+		if self.weights.shape[0] != Z.shape[0]:
 			self.set_weights(Z.shape[0])
 		sorted_indices = np.argsort(Z)
 		sorted_ = Z[sorted_indices]

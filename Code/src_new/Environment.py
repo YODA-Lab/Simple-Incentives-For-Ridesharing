@@ -307,6 +307,7 @@ class MapEnvironment(Environment):
         self.mean_pair_sr = 0
         self.pair_sr = {}  #Service rates for zone pairs
         self.source_sr = {} #service rates by origin zones 
+        self.mean_source_sr = 0
         for item in self.keys_list:
             self.pair_sr[item] = {}
             self.source_sr[item] = [0,0,0]
@@ -320,6 +321,7 @@ class MapEnvironment(Environment):
         self.delta = DELTA #Weight of the driver fairness term
         self.alpha_d = ALPHA_D
         self.driver_earnings = [0 for v in range(NUM_VEHS)]
+        self.discounted_driver_earnings = [0 for v in range(NUM_VEHS)]
         self.norm_disc_driver_earnings = [0 for v in range(NUM_VEHS)]
         self.driver_avg = 0
         self.driver_gini = 0
@@ -637,6 +639,7 @@ class MapEnvironment(Environment):
         self.driver_gini, self.driver_avg = gini(self.driver_earnings, return_mean=True)
         self.driver_min = np.min(self.driver_earnings)
         disc_earnings = np.array([v.discounted_value for v in vehs])
+        self.discounted_driver_earnings = disc_earnings
         self.norm_disc_driver_earnings = disc_earnings/max(1, np.max(disc_earnings))
 
 
@@ -764,29 +767,31 @@ class MapEnvironment(Environment):
         """
         if role=='passenger':
             if self.fairtype=='src':
-                dist = deepcopy(self.source_sr)
-                # sr, seen, tot
+                modded_zs_delta = np.zeros(len(self.source_sr))
                 for req in action.requests:
                     frm = self.zone_mapping[req.pickup]
-                    dist[frm][1] += 1
-                    dist[frm][2] += 1
-                    dist[frm][0] = dist[frm][1]/dist[frm][2]
-                # flatten the dictionary and return
-                return [v for k,v in dist.items()]
+                    seen = self.source_sr[frm][1] + 1
+                    tot = self.source_sr[frm][2] + 1
+                    sr = seen/tot
+                    frm_idx = self.keys_list.index(frm)
+                    modded_zs_delta[frm_idx] = sr - self.source_sr[frm][0]
+                return modded_zs_delta
             else:
-                dist = deepcopy(self.pair_sr)
+                # dist = deepcopy(self.pair_sr)
+                modded_zs_delta = np.zeros(len(self.pair_sr)*len(self.pair_sr))
                 for req in action.requests:
                     frm, to = self.zone_mapping[req.pickup], self.zone_mapping[req.dropoff]
-                    dist[frm][to][1] += 1
-                    dist[frm][to][2] += 1
-                    dist[frm][to][0] = dist[frm][to][1]/dist[frm][to][2]
-                # flatten the dictionary and return
-                return [v for k,g in dist.items() for k2,v in g.items()]
+                    seen = self.pair_sr[frm][to][1] + 1
+                    tot = self.pair_sr[frm][to][2] + 1
+                    sr = seen/tot
+                    frm_to_idx = self.keys_list.index(frm)*len(self.pair_sr) + self.keys_list.index(to)
+                    modded_zs_delta[frm_to_idx] = sr - self.pair_sr[frm][to][0]
+                return modded_zs_delta
         elif role=='driver':
-            dist = deepcopy(self.driver_earnings)
+            modded_zs_delta = np.zeros(len(self.driver_earnings))
             for req in action.requests:
-                dist[action.veh_id] += req.base_price
-            return dist
+                modded_zs_delta[action.veh_id] += req.base_price
+            return modded_zs_delta
 
 
     def get_GIFF(self, action, Qia, delta_adv, fairness_fn):
@@ -812,29 +817,30 @@ class MapEnvironment(Environment):
         GIFFPass = 0
         if self.beta!=0:
             # flatten the dictionary
-            if self.fairtype=='src':
-                Zs = [v for k,v in self.source_sr.items()]
-            else:
-                Zs = [v for k,g in self.pair_sr.items() for k2,v in g.items()]
+            Zs = self.ZsP
             f_prev = fairness_fn.get_metric(Zs)
 
-            Zs_post = self.get_modded_zs(action, 'passenger')
+            Zs_delta = self.get_modded_zs(action, 'passenger')
+            Zs_post = Zs + Zs_delta
             f_post = fairness_fn.get_metric(Zs_post)
-            delF = np.sign(f_post-f_prev)
+            # delF = np.sign(f_post-f_prev)
+            delF = f_post-f_prev
+            total_advantage_correction = 0
+            mean_z = self.mean_pair_sr if self.fairtype=='pair' else self.mean_source_sr
             for req in action.requests:
                 frm,to = self.zone_mapping[req.pickup], self.zone_mapping[req.dropoff]
                 z_i = self.pair_sr[frm][to][0] if self.fairtype=='pair' else self.source_sr[frm][0]
-                mean_z = self.mean_pair_sr if self.fairtype=='pair' else self.mean_source_sr
                 adv_scaling_factor = z_i - mean_z
                 delQ = Qia
                 advantage_correction = adv_scaling_factor*delQ
-                GIFFp = delF + delta_adv * advantage_correction
-                GIFFPass += self.beta * GIFFp
+                total_advantage_correction += advantage_correction 
+            GIFFp = delF + delta_adv * total_advantage_correction
+            GIFFPass += self.beta * GIFFp
         
         # GIFF(D)
         GIFFDrive = 0
         if self.delta!=0:
-            Zs = self.driver_earnings
+            Zs = self.discounted_driver_earnings
             f_prev = fairness_fn.get_metric(Zs)
             Zs_post = self.get_modded_zs(action, 'driver')
             f_post = fairness_fn.get_metric(Zs_post)
@@ -845,9 +851,15 @@ class MapEnvironment(Environment):
             adv_scaling_factor = dr_i - dr_avg
             delQ = Qia
             for req in action.requests:
-                GIFFd = delF + delta_adv * adv_scaling_factor * delQ
-                GIFFDrive += self.delta * GIFFd
+                dit # porbably dont need to iterate. Its alredy included in the action
+            GIFFd = delF + delta_adv * adv_scaling_factor * delQ
+            GIFFDrive += self.delta * GIFFd
 
         # total_reward = (1-max(self.beta, self.delta))*total_reward + GIFFPass + GIFFDrive
+        # print("Size of fairness term: ", GIFFPass + GIFFDrive)
+        # print("Size of reward term: ", total_reward)
+        # print("Qia: ", Qia)
+        # if GIFFPass + GIFFDrive>0:
+        #     print("GIFFPass: ", GIFFPass)
         total_reward = total_reward + GIFFPass + GIFFDrive
         return total_reward
