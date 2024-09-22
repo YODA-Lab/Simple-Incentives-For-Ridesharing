@@ -818,6 +818,10 @@ class MapEnvironment(Environment):
         if self.beta!=0:
             # flatten the dictionary
             Zs = self.ZsP
+            # if fairness_fn.name=='Variance':
+            #     #add small random noise to Zs based on time. Make it smaller as the sum increases
+            #     max_noise = 1/(self.total_requests+1)
+            #     Zs = Zs + np.random.uniform(0,max_noise,len(Zs))
             f_prev = fairness_fn.get_metric(Zs)
 
             Zs_delta = self.get_modded_zs(action, 'passenger')
@@ -825,6 +829,9 @@ class MapEnvironment(Environment):
             f_post = fairness_fn.get_metric(Zs_post)
             # delF = np.sign(f_post-f_prev)
             delF = f_post-f_prev
+            if fairness_fn.name=='Variance':
+                delF = max(delF,0) # SI+-like behavior for variance
+                # print("Variance: ", delF)
             total_advantage_correction = 0
             mean_z = self.mean_pair_sr if self.fairtype=='pair' else self.mean_source_sr
             for req in action.requests:
@@ -859,7 +866,7 @@ class MapEnvironment(Environment):
         # print("Size of fairness term: ", GIFFPass + GIFFDrive)
         # print("Size of reward term: ", total_reward)
         # print("Qia: ", Qia)
-        # if GIFFPass + GIFFDrive>0:
+        # if GIFFPass + GIFFDrive!=0:
         #     print("GIFFPass: ", GIFFPass)
         total_reward = total_reward + GIFFPass + GIFFDrive
         return total_reward

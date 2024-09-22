@@ -93,6 +93,10 @@ def add_GIFF_to_score(scored_actions_all_vehs, envt, fairness_type='variance'):
         envt.ZsP = np.array([v[0] for k,v in envt.source_sr.items()])
     else:
         envt.ZsP = np.array([v[0] for k,g in envt.pair_sr.items() for k2,v in g.items()])
+    if fairness_fn.name=='Variance':
+        #add small random noise to Zs based on time. Make it smaller as the sum increases
+        max_noise = 1/(envt.total_requests+1)
+        envt.ZsP = envt.ZsP + np.random.uniform(0,max_noise,len(envt.ZsP))
     def add_GIFF(envt, action, score):
         reward = envt.get_GIFF(action, score, delta_adv=0.0, fairness_fn=fairness_fn)
         # return (action, (1-max([beta,delta]))*score + reward) # Reward = R + beta * GIFF(P) + delta * GIFF(D)
