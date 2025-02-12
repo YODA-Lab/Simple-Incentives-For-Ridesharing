@@ -67,7 +67,9 @@ def run_epoch(envt: Environment,
     num_total_requests = 0
     vehs_prev = deepcopy(vehs)
     verbose=False #If extra output needed
+    iters = 0
     while True:
+        iters+=1
         # Get new requests
         try:
             current_requests = next(request_generator)
@@ -79,7 +81,10 @@ def run_epoch(envt: Environment,
                 current_requests = [req for req, sel in zip(current_requests, select) if sel]
                 print(len(current_requests))
             if verbose: print()
-            print(f"Current time: {envt.current_time // 3600:02d}:{(envt.current_time // 60) % 60:02d}, DAY: {DAY}, {args.valuefunction}({args.alpha}, {args.beta}) SR pair: Mean={envt.mean_pair_sr}, Min={envt.min_pair_sr}",end='\r')
+            if envt.delta!=0:
+                print(f"Current time: {envt.current_time // 3600:02d}:{(envt.current_time // 60) % 60:02d}, DAY: {DAY}, {args.valuefunction}({args.alpha}, {args.delta}) Driver fairness: Mean={envt.driver_avg}, Min={envt.driver_min}, SR: {envt.service_rate}",end='\r')
+            else:
+                print(f"Current time: {envt.current_time // 3600:02d}:{(envt.current_time // 60) % 60:02d}, DAY: {DAY}, {args.valuefunction}({args.alpha}, {args.beta}) SR pair: Mean={envt.mean_pair_sr}, Min={envt.min_pair_sr}, SR: {envt.service_rate}",end='\r')
             if verbose: print()
             if verbose: print("Number of new requests: {}".format(len(current_requests)))
             num_total_requests += len(current_requests)
@@ -108,7 +113,11 @@ def run_epoch(envt: Environment,
         
         if args.giff:
             # add_GIFF_to_score
-            scored_actions_all_vehs = add_GIFF_to_score(scored_actions_all_vehs, envt, args.fairness_type)
+            scored_actions_all_vehs = add_reward_to_score(scored_actions_all_vehs, envt)
+            if iters>1:
+                scored_actions_all_vehs = add_GIFF_to_score(scored_actions_all_vehs, envt, args.fairness_type)
+            else:
+                print('Skipping GIFF')
         else:
             scored_actions_all_vehs = add_reward_to_score(scored_actions_all_vehs, envt)
 
@@ -117,8 +126,8 @@ def run_epoch(envt: Environment,
         #ILP 
         if solver=='ILP':
             # minimum length of actions for any agent
-            min_len = min([len(actions) for actions in scored_actions_all_vehs])
-            print(f"ILP: Min length of actions: {min_len}", len(scored_actions_all_vehs))
+            # min_len = min([len(actions) for actions in scored_actions_all_vehs])
+            # print(f"ILP: Min length of actions: {min_len}", len(scored_actions_all_vehs))
             scored_final_actions = central_agent.choose_actions(scored_actions_all_vehs, is_training=is_training, epoch_num=envt.num_days_trained)
         
         # Greedy #Current implementation is even less efficient than ILP
@@ -318,6 +327,7 @@ if __name__ == '__main__':
     envt.lamda = args.lamda
     envt.plus_driver = False
     envt.alpha_d = args.alpha_d
+    envt.giff = args.giff
 
     if (args.alpha_d==0 and args.delta!=0):
         print("Plus drivers only")
@@ -399,13 +409,13 @@ if __name__ == '__main__':
     # columns =  ['VF', 'giff', 'num_vehicles', 'alpha', 'beta', 'delta', 'SR', 'Fairness Type (GIFF)', 'Metric (P)', 'Metric (D)', 'Pair SR mean', 'Pair SR min', 'Source SR mean', 'Source SR min', 'Driver mean', 'Driver min']
     # columns =  ['VF', 'alpha', 'beta', 'delta', 'SR', 'Fairness Type (GIFF)', 'Metric (P)', 'Metric (D)', 'Pair SR mean', 'Pair SR min', 'Driver mean', 'Driver min', 'SR Dist', 'Driver Dist']
     # use columns from res
-    columns = ['VF', 'giff', 'num_vehicles', 'alpha', 'beta', 'delta', 'Fairness Type (GIFF)']
+    columns = ['VF', 'giff', 'num_vehicles', 'alpha', 'beta', 'delta', 'alpha_d', 'Fairness Type (GIFF)']
     columns.extend(list(res.keys()))
     if not os.path.exists(resfile):
         with open(resfile, 'w') as f:
             f.write(','.join(columns)+'\n')
     with open(resfile, 'a') as f:
-        dic = {'VF':args.valuefunction, 'giff':args.giff, 'num_vehicles':args.numvehs, 'alpha':args.alpha, 'beta':args.beta, 'delta':args.delta, 'Fairness Type (GIFF)':args.fairness_type}
+        dic = {'VF':args.valuefunction, 'giff':args.giff, 'num_vehicles':args.numvehs, 'alpha':args.alpha, 'beta':args.beta, 'delta':args.delta, 'alpha_d':args.alpha_d, 'Fairness Type (GIFF)':args.fairness_type}
         dic.update(res)
         f.write(','.join([str(dic[col]) for col in columns])+'\n')
         

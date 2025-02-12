@@ -735,6 +735,9 @@ class MapEnvironment(Environment):
             total_reward = profit_term
 
         #adding driver and rider fairness
+        if self.giff:
+            # don't add SI rewards
+            return total_reward
 
         #SIP
         assert self.alpha in [0,1]
@@ -763,7 +766,8 @@ class MapEnvironment(Environment):
 
     def get_modded_zs(self, action, role):
         """
-        Return the modified Zs for a given action
+        Return the modified Zs for a given action (for GIFF)
+        Do warm-starts for initial steps, assume more reqs seen than actually seen
         """
         if role=='passenger':
             if self.fairtype=='src':
@@ -772,6 +776,8 @@ class MapEnvironment(Environment):
                     frm = self.zone_mapping[req.pickup]
                     seen = self.source_sr[frm][1] + 1
                     tot = self.source_sr[frm][2] + 1
+                    if tot<2:
+                        tot = 1 + 0.5*tot
                     sr = seen/tot
                     frm_idx = self.keys_list.index(frm)
                     modded_zs_delta[frm_idx] = sr - self.source_sr[frm][0]
@@ -783,6 +789,8 @@ class MapEnvironment(Environment):
                     frm, to = self.zone_mapping[req.pickup], self.zone_mapping[req.dropoff]
                     seen = self.pair_sr[frm][to][1] + 1
                     tot = self.pair_sr[frm][to][2] + 1
+                    if tot<2:
+                        tot = 1 + 0.5*tot
                     sr = seen/tot
                     frm_to_idx = self.keys_list.index(frm)*len(self.pair_sr) + self.keys_list.index(to)
                     modded_zs_delta[frm_to_idx] = sr - self.pair_sr[frm][to][0]
@@ -793,10 +801,83 @@ class MapEnvironment(Environment):
                 modded_zs_delta[action.veh_id] += req.base_price
             return modded_zs_delta
 
-
     def get_GIFF(self, action, Qia, delta_adv, fairness_fn):
         """
+        Return the GIFF-modified Q value for a given action
+        The actual formulation as used in the paper
+        Uses 'alpha' in the arguments as delta_adv
+        Uses 'alpha_d' in the arguments to trigger the SI+-like behavior
+        """
+        if self.beta==0 and self.delta==0:
+            return Qia
+
+        if self.beta!=0 and self.delta!=0:
+            print("Both beta and delta are non-zero. This is not implemented yet.")
+            exit()
+
+        if self.beta!=0:
+            # Passenger fairness. Only implemented for pair-wise fairness
+            Zs = self.ZsP
+            f_prev = fairness_fn.get_metric(Zs)
+            Zs_delta = self.get_modded_zs(action, 'passenger')
+            # print('---')
+            # print(Zs_delta)
+            # print(sum(Zs_delta))
+            Zs_post = Zs + Zs_delta
+            # print(Zs_post)
+            f_post = fairness_fn.get_metric(Zs_post)
+            # print(f_post, f_prev)
+            delF = f_post-f_prev
+            if delF<0:
+                if self.alpha_d==1:
+                    delF=0
+
+            total_advantage_correction = 0
+            mean_z = self.mean_pair_sr
+            for req in action.requests:
+                frm,to = self.zone_mapping[req.pickup], self.zone_mapping[req.dropoff]
+                z_i = self.pair_sr[frm][to][0]
+                adv_scaling_factor = z_i - mean_z
+                delQ = Qia
+                advantage_correction = adv_scaling_factor*delQ
+                total_advantage_correction += advantage_correction
+
+            GIFFQ = (1-self.beta)*Qia + self.beta*(delF + delta_adv*total_advantage_correction)
+            
+            return GIFFQ
+
+        elif self.delta!=0:
+            # Driver fairness
+            Zs = self.discounted_driver_earnings
+            Zs = self.driver_earnings
+            f_prev = fairness_fn.get_metric(Zs)
+            
+            # using Qia
+            Zs_delta = np.zeros(len(self.driver_earnings))
+            Zs_delta[action.veh_id] = Qia
+
+            # # Using R
+            # Zs_delta = self.get_modded_zs(action, 'driver')
+
+            Zs_post = Zs + Zs_delta
+            f_post = fairness_fn.get_metric(Zs_post)
+            delF = f_post-f_prev
+            if delF<0:
+                if self.alpha_d==1:
+                    delF=0
+
+            dr_avg = np.mean(Zs)
+            dr_i = Zs[action.veh_id]
+            adv_scaling_factor = dr_i - dr_avg
+            delQ = Qia
+            GIFFQ = (1-self.delta)*Qia + self.delta*(delF + delta_adv*adv_scaling_factor*delQ)
+            return GIFFQ
+            
+
+    def get_GIFF_alt(self, action, Qia, delta_adv, fairness_fn):
+        """
         Return the GIFF for a given action
+        Structured more like SI
         """
         request_infos = self.get_request_infos(action)
         # The total reward is the sum of rewards of all requests in a given action
