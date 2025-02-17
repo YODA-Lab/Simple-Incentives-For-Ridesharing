@@ -53,13 +53,13 @@ passenger_fair = False
 # driver fair
 if driver_fair:
     alphads = [0.0, 1.0]
-    deltas = [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
+    deltas = [0.0, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0]
     betas = [0.0]
     alphas = [0.0]
 
     if args.giff:
         betas = [0.0]
-        alphads = [0.0, 1.0] # when used with GIFF, becomes a trigger for GIFF (+))
+        alphads = [0.5] # when used with GIFF, becomes a trigger for GIFF (+))
         deltas = [0.0, 0.1, 0.2, 0.5, 0.9, 0.95, 0.99, 0.995, 0.999, 0.9995, 1.0]
         # deltas = [0.995]
         alphas = [0.0] # This is the degree of advantage correction

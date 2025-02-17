@@ -807,6 +807,7 @@ class MapEnvironment(Environment):
         The actual formulation as used in the paper
         Uses 'alpha' in the arguments as delta_adv
         Uses 'alpha_d' in the arguments to trigger the SI+-like behavior
+            If alpha_d = 0.5, uses rewards for drivers instead of Q. Does not support SI+-like behavior with this.
         """
         if self.beta==0 and self.delta==0:
             return Qia
@@ -857,7 +858,8 @@ class MapEnvironment(Environment):
             Zs_delta[action.veh_id] = Qia
 
             # # Using R
-            # Zs_delta = self.get_modded_zs(action, 'driver')
+            if self.alpha_d==0.5:
+                Zs_delta = self.get_modded_zs(action, 'driver')
 
             Zs_post = Zs + Zs_delta
             f_post = fairness_fn.get_metric(Zs_post)
